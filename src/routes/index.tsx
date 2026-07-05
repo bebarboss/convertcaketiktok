@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Heart, MessageCircle, Share2, Plus, X, Loader2, Settings } from "lucide-react";
 
 export const Route = createFileRoute("/")({
