@@ -1,5 +1,6 @@
-export const DEFAULT_API_BASE =
-  import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
+// Default "/api" routes through Vercel proxy functions (no CORS issues).
+// For local dev, use the Settings panel to set e.g. http://127.0.0.1:8000
+export const DEFAULT_API_BASE = "/api";
 
 export function getApiBase(): string {
   if (typeof localStorage !== "undefined") {
@@ -61,19 +62,13 @@ export type SearchResp = {
 
 // ─── API functions ─────────────────────────────────────────────────────────────
 
-const BASE_HEADERS: HeadersInit = {
-  "ngrok-skip-browser-warning": "true",
-};
-
 export async function analyzeUrls(
   urls: string[],
   numKeywords = 5,
   apiBase = getApiBase(),
 ): Promise<AnalyzeResp> {
   const qs = urls.map((u) => `url=${encodeURIComponent(u)}`).join("&");
-  const r = await fetch(`${apiBase}/analyze?${qs}&num_keywords=${numKeywords}`, {
-    headers: BASE_HEADERS,
-  });
+  const r = await fetch(`${apiBase}/analyze?${qs}&num_keywords=${numKeywords}`);
   if (!r.ok) {
     const body = await r.json().catch(() => null);
     throw new Error(body?.detail ?? `HTTP ${r.status}`);
@@ -87,9 +82,7 @@ export async function searchTikTok(
   apiBase = getApiBase(),
 ): Promise<SearchResp> {
   const qs = keywords.map((k) => `keyword=${encodeURIComponent(k)}`).join("&");
-  const r = await fetch(`${apiBase}/search?${qs}&top_n=${topN}`, {
-    headers: BASE_HEADERS,
-  });
+  const r = await fetch(`${apiBase}/search?${qs}&top_n=${topN}`);
   if (!r.ok) {
     const body = await r.json().catch(() => null);
     throw new Error(body?.detail ?? `HTTP ${r.status}`);
