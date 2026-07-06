@@ -9,6 +9,6 @@
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "dest": "/api/ssr" }
+    { "source": "/(.*)", "destination": "/api/ssr" }
   ]
 }
