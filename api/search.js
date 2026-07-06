@@ -1,6 +1,6 @@
 // Server-side proxy → /search (avoids CORS + ngrok browser warning)
 export default async function handler(req, res) {
-  const backendBase = process.env.API_BASE ?? "http://127.0.0.1:8000";
+  const backendBase = (process.env.API_BASE ?? "http://127.0.0.1:8000").replace(/\/+$/, "");
   const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
   const targetUrl = `${backendBase}/search${query}`;
 
