@@ -61,13 +61,19 @@ export type SearchResp = {
 
 // ─── API functions ─────────────────────────────────────────────────────────────
 
+const BASE_HEADERS: HeadersInit = {
+  "ngrok-skip-browser-warning": "true",
+};
+
 export async function analyzeUrls(
   urls: string[],
   numKeywords = 5,
   apiBase = getApiBase(),
 ): Promise<AnalyzeResp> {
   const qs = urls.map((u) => `url=${encodeURIComponent(u)}`).join("&");
-  const r = await fetch(`${apiBase}/analyze?${qs}&num_keywords=${numKeywords}`);
+  const r = await fetch(`${apiBase}/analyze?${qs}&num_keywords=${numKeywords}`, {
+    headers: BASE_HEADERS,
+  });
   if (!r.ok) {
     const body = await r.json().catch(() => null);
     throw new Error(body?.detail ?? `HTTP ${r.status}`);
@@ -81,7 +87,9 @@ export async function searchTikTok(
   apiBase = getApiBase(),
 ): Promise<SearchResp> {
   const qs = keywords.map((k) => `keyword=${encodeURIComponent(k)}`).join("&");
-  const r = await fetch(`${apiBase}/search?${qs}&top_n=${topN}`);
+  const r = await fetch(`${apiBase}/search?${qs}&top_n=${topN}`, {
+    headers: BASE_HEADERS,
+  });
   if (!r.ok) {
     const body = await r.json().catch(() => null);
     throw new Error(body?.detail ?? `HTTP ${r.status}`);
