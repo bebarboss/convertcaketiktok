@@ -95,7 +95,7 @@ function Index() {
     setSearchErr(null);
     setResults(null);
     try {
-      const data = await apiSearchTikTok(activeKeywords, 10, apiBase);
+      const data = await apiSearchTikTok([activeKeywords.join(" ")], 10, apiBase);
       setResults(data);
     } catch (e: any) {
       setSearchErr(e?.message ?? "Search failed");
@@ -381,6 +381,10 @@ function Index() {
           </div>
         </section>
       </div>
+
+      <footer className="pb-4 text-center text-[11px]" style={{ color: "#94a3b8" }}>
+        &copy; {new Date().getFullYear()} Navarit Rodsamrit. All rights reserved.
+      </footer>
 
       <style>{`
         .custom-scroll::-webkit-scrollbar { width: 6px; }
