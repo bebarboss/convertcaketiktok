@@ -81,7 +81,7 @@ function Index() {
     try {
       const data = await apiAnalyzeUrls(urls, 5, apiBase);
       setAnalysis(data);
-      if (data.keywords?.length) setActiveKeywords(data.keywords);
+      if (data.keywords?.length) setActiveKeywords([data.keywords[0]]);
     } catch (e: any) {
       setAnalyzeErr(e?.message ?? "Failed to analyze");
     } finally {
