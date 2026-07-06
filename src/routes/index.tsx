@@ -1,6 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Heart, MessageCircle, Share2, Plus, X, Loader2, Settings } from "lucide-react";
+import {
+  DEFAULT_API_BASE,
+  getApiBase,
+  setApiBase,
+  analyzeUrls as apiAnalyzeUrls,
+  searchTikTok as apiSearchTikTok,
+  type AnalyzeResp,
+  type Video,
+  type Author,
+  type SearchResp,
+} from "@/lib/api";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -21,38 +32,6 @@ export const Route = createFileRoute("/")({
   }),
 });
 
-type PageContent = { url: string; title: string; description: string };
-type AnalyzeResp = { page_contents: PageContent[]; keywords: string[] };
-type Video = {
-  id: string;
-  tiktok_url: string;
-  desc: string;
-  cover: string;
-  author_name: string;
-  author_uniqueId: string;
-  author_avatar: string;
-  author_followers: number;
-  author_total_likes: number;
-  stats: { likes: number; comments: number; shares: number; plays: number; favorites: number };
-};
-type Author = {
-  author_name: string;
-  author_uniqueId: string;
-  author_avatar: string;
-  followers: number;
-  total_likes: number;
-  top_likes: number;
-};
-type SearchResp = {
-  keyword: string;
-  videos_count: number;
-  videos: Video[];
-  top_authors_count: number;
-  top_authors: Author[];
-};
-
-const DEFAULT_API = "http://127.0.0.1:8000";
-
 function fmt(n: number) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
   if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
@@ -60,14 +39,14 @@ function fmt(n: number) {
 }
 
 function Index() {
-  const [apiBase, setApiBase] = useState(DEFAULT_API);
+  const [apiBase, setApiBaseState] = useState(DEFAULT_API_BASE);
   const [showSettings, setShowSettings] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [urls, setUrls] = useState<string[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeErr, setAnalyzeErr] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<AnalyzeResp | null>(null);
-  const [activeKeyword, setActiveKeyword] = useState<string | null>(null);
+  const [activeKeywords, setActiveKeywords] = useState<string[]>([]);
 
   const [searching, setSearching] = useState(false);
   const [searchErr, setSearchErr] = useState<string | null>(null);
@@ -75,8 +54,7 @@ function Index() {
   const [view, setView] = useState<"video" | "authors">("video");
 
   useEffect(() => {
-    const saved = localStorage.getItem("tt_api_base");
-    if (saved) setApiBase(saved);
+    setApiBaseState(getApiBase());
   }, []);
 
   function addUrl() {
@@ -99,14 +77,11 @@ function Index() {
     setAnalyzing(true);
     setAnalyzeErr(null);
     setAnalysis(null);
-    setActiveKeyword(null);
+    setActiveKeywords([]);
     try {
-      const qs = urls.map((u) => `url=${encodeURIComponent(u)}`).join("&");
-      const r = await fetch(`${apiBase}/analyze?${qs}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = (await r.json()) as AnalyzeResp;
+      const data = await apiAnalyzeUrls(urls, 5, apiBase);
       setAnalysis(data);
-      if (data.keywords?.length) setActiveKeyword(data.keywords[0]);
+      if (data.keywords?.length) setActiveKeywords(data.keywords);
     } catch (e: any) {
       setAnalyzeErr(e?.message ?? "Failed to analyze");
     } finally {
@@ -115,16 +90,12 @@ function Index() {
   }
 
   async function runSearch() {
-    if (!activeKeyword) return;
+    if (activeKeywords.length === 0) return;
     setSearching(true);
     setSearchErr(null);
     setResults(null);
     try {
-      const r = await fetch(
-        `${apiBase}/search?keyword=${encodeURIComponent(activeKeyword)}&top_n=10`,
-      );
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = (await r.json()) as SearchResp;
+      const data = await apiSearchTikTok(activeKeywords, 10, apiBase);
       setResults(data);
     } catch (e: any) {
       setSearchErr(e?.message ?? "Search failed");
@@ -133,7 +104,13 @@ function Index() {
     }
   }
 
-  const canSearch = !!activeKeyword && !searching;
+  const canSearch = activeKeywords.length > 0 && !searching;
+
+  function toggleKeyword(k: string) {
+    setActiveKeywords((prev) =>
+      prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k],
+    );
+  }
 
   return (
     <div className="min-h-screen w-full" style={{ background: "#F4F8FF" }}>
@@ -166,8 +143,8 @@ function Index() {
                 </label>
                 <input
                   value={apiBase}
-                  onChange={(e) => setApiBase(e.target.value)}
-                  onBlur={() => localStorage.setItem("tt_api_base", apiBase)}
+                  onChange={(e) => setApiBaseState(e.target.value)}
+                  onBlur={() => setApiBase(apiBase)}
                   className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none"
                   style={brandBorder}
                 />
@@ -247,6 +224,8 @@ function Index() {
                 AI Analysis
               </div>
 
+                <ProgressBar running={analyzing} />
+
               {analyzing && (
                 <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm" style={{ color: "#64748B" }}>
                   <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#2F80FF" }} />
@@ -288,11 +267,11 @@ function Index() {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {analysis.keywords.map((k) => {
-                          const active = k === activeKeyword;
+                          const active = activeKeywords.includes(k);
                           return (
                             <button
                               key={k}
-                              onClick={() => setActiveKeyword(k)}
+                              onClick={() => toggleKeyword(k)}
                               className="rounded-full px-3 py-1.5 text-xs font-medium transition"
                               style={
                                 active
@@ -337,7 +316,12 @@ function Index() {
                 </h2>
                 {results && (
                   <p className="text-xs" style={{ color: "#64748B" }}>
-                    keyword: <span className="font-semibold" style={{ color: "#2F80FF" }}>{results.keyword}</span>
+                    {results.keywords.map((k, i) => (
+                      <span key={k}>
+                        {i > 0 && <span className="mx-1">·</span>}
+                        <span className="font-semibold" style={{ color: "#2F80FF" }}>{k}</span>
+                      </span>
+                    ))}
                     {" · "}
                     {results.videos_count} videos · {results.top_authors_count} authors
                   </p>
@@ -365,6 +349,8 @@ function Index() {
                 </div>
               </div>
             </div>
+
+            <ProgressBar running={searching} />
 
             <div className="flex-1 overflow-y-auto pr-1 custom-scroll">
               {searching && (
@@ -406,6 +392,52 @@ function Index() {
 }
 
 const brandBorder = { borderColor: "#DCE8FF" } as const;
+
+function ProgressBar({ running }: { running: boolean }) {
+  const [pct, setPct] = useState(0);
+  const [phase, setPhase] = useState<"idle" | "running" | "completing">("idle");
+  const prevRunning = useRef(false);
+
+  useEffect(() => {
+    if (running && !prevRunning.current) {
+      setPhase("running");
+      setPct(0);
+    } else if (!running && prevRunning.current) {
+      setPhase("completing");
+      setPct(100);
+    }
+    prevRunning.current = running;
+  }, [running]);
+
+  useEffect(() => {
+    if (phase !== "running") return;
+    const id = setInterval(() => {
+      setPct((p) => (p >= 88 ? p : p + (88 - p) * 0.04));
+    }, 250);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "completing") return;
+    const id = setTimeout(() => setPhase("idle"), 600);
+    return () => clearTimeout(id);
+  }, [phase]);
+
+  if (phase === "idle") return null;
+
+  return (
+    <div className="w-full overflow-hidden rounded-full" style={{ height: 4, background: "#DCE8FF" }}>
+      <div
+        className="h-full rounded-full"
+        style={{
+          width: `${pct}%`,
+          background: "#2F80FF",
+          transition: phase === "completing" ? "width 0.4s ease-in-out" : "width 0.25s ease-out",
+        }}
+      />
+    </div>
+  );
+}
 
 function EmptyState() {
   return (
@@ -471,8 +503,17 @@ function VideoList({ videos }: { videos: Video[] }) {
               style={{ background: "#F4F8FF" }}
             />
             <div className="min-w-0">
-              <div className="truncate text-sm font-bold" style={{ color: "#1E293B" }}>
+              <a
+                href={`https://www.tiktok.com/@${v.author_uniqueId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="truncate block text-sm font-bold hover:underline"
+                style={{ color: "#1E293B" }}
+              >
                 {v.author_name}
+              </a>
+              <div className="text-[11px]" style={{ color: "#64748B" }}>
+                @{v.author_uniqueId}
               </div>
               <div className="text-[11px]" style={{ color: "#64748B" }}>
                 followers: <span className="font-medium">{fmt(v.author_followers)}</span>
@@ -520,8 +561,17 @@ function AuthorGrid({ authors }: { authors: Author[] }) {
             style={{ background: "#F4F8FF" }}
           />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-bold" style={{ color: "#1E293B" }}>
+            <a
+              href={`https://www.tiktok.com/@${a.author_uniqueId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="truncate block text-sm font-bold hover:underline"
+              style={{ color: "#1E293B" }}
+            >
               {a.author_name}
+            </a>
+            <div className="text-[11px]" style={{ color: "#64748B" }}>
+              @{a.author_uniqueId}
             </div>
             <div className="text-[11px]" style={{ color: "#64748B" }}>
               followers: <span className="font-medium">{fmt(a.followers)}</span>
